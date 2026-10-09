@@ -1,0 +1,55 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+IDI_APP     ICON "app.ico"
+IDI_APP_OFF ICON "app_off.ico"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+IDD_MAIN DIALOGEX 0, 0, 290, 204
+STYLE DS_SHELLFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Simple Audio Split"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Tick every device that should play your PC's sound:", IDC_STATIC, 10, 9, 270, 9
+    CONTROL         "", IDC_DEVICES, WC_LISTVIEW, LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 10, 21, 270, 100
+    PUSHBUTTON      "&Play test sound", IDC_TEST, 10, 127, 72, 14
+    LTEXT           "Plays a short chime on the selected device, so you can tell identical headsets apart.", IDC_HINT, 89, 126, 191, 18
+    CONTROL         "", IDC_STATIC, "Static", SS_ETCHEDHORZ, 10, 150, 270, 1
+    LTEXT           "", IDC_STATUS, 10, 157, 270, 9, SS_ENDELLIPSIS
+    CONTROL         "&Mirroring on", IDC_ENABLED, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 171, 140, 10
+    CONTROL         "Start with &Windows", IDC_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 185, 140, 10
+    PUSHBUTTON      "E&xit", IDM_EXIT, 176, 182, 50, 14
+    DEFPUSHBUTTON   "Close", IDCANCEL, 230, 182, 50, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "Simple Audio Split"
+            VALUE "FileVersion", "1.0.0"
+            VALUE "InternalName", "SimpleAudioSplit"
+            VALUE "OriginalFilename", "SimpleAudioSplit.exe"
+            VALUE "ProductName", "Simple Audio Split"
+            VALUE "ProductVersion", "1.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

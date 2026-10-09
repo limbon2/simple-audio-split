@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        shell: cmd
+        run: build.bat
+
+      - name: Test
+        shell: cmd
+        run: build\dsp_test.exe
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: SimpleAudioSplit
+          path: |
+            build/SimpleAudioSplit.exe
+            build/sas-cli.exe
+
+  # Pushing a tag like v1.2.0 publishes the binaries built above as a GitHub release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: SimpleAudioSplit
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" SimpleAudioSplit.exe sas-cli.exe
+          --repo "$GITHUB_REPOSITORY"
+          --title "Simple Audio Split ${GITHUB_REF_NAME#v}"
+          --generate-notes
