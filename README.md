@@ -1,11 +1,11 @@
 # Simple Audio Split
 
-[![Build](https://github.com/limbon2/simple-audio-split/actions/workflows/build.yml/badge.svg)](https://github.com/limbon2/simple-audio-split/actions/workflows/build.yml)
+[![Build](https://github.com/InverseAltruism/audio-split/actions/workflows/build.yml/badge.svg)](https://github.com/InverseAltruism/audio-split/actions/workflows/build.yml)
 
 Plays your PC's sound on several output devices at once, for example two wireless
 headsets. Tick the devices and you're done: no virtual cables, buses or routing.
 
-<img src="docs/screenshot.png" width="558" alt="The Simple Audio Split window: a list of playback devices with checkboxes. The default output is labelled Default output, and a ticked device shows Playing, 41 ms behind.">
+<img src="docs/screenshot.png" width="558" alt="The Simple Audio Split window: a list of playback devices with checkboxes. The default output is labelled Default output, and a ticked device shows Playing and how many milliseconds behind it is.">
 
 Windows has no built-in way to do this for wired or USB devices. The usual advice is
 a virtual mixer such as Voicemeeter, which works but takes a lot of setup for
@@ -13,7 +13,7 @@ something this simple.
 
 ## Download
 
-Get `SimpleAudioSplit.exe` from the [latest release](https://github.com/limbon2/simple-audio-split/releases/latest).
+Get `SimpleAudioSplit.exe` from the [latest release](https://github.com/InverseAltruism/audio-split/releases/latest).
 It's a single file for 64-bit Windows 10 and 11: nothing to install, no drivers, no admin rights.
 
 The app isn't code-signed, so the first time you run it Windows may say "Windows
@@ -34,9 +34,13 @@ stops it. Tick **Start with Windows** to have it start silently in the tray when
 sign in. Your choices are remembered, including after a headset's USB receiver moves
 to another port.
 
-The copy plays about 40 ms behind the default output. That's not noticeable for two
-people listening or watching together. Each headset keeps its own volume control, and
-the copy also appears as "Simple Audio Split" in that device's volume mixer.
+The copy plays a few milliseconds behind the default output; the window shows the
+exact figure. When a device's driver supports Windows low-latency shared mode, the app
+uses it and the delay is typically around 10 ms. Drivers that only offer Windows'
+standard 10 ms periods (some HDMI/DisplayPort audio drivers) can't go that low, and the
+copy then plays roughly 30 ms behind. Each
+headset keeps its own volume control, and the copy also appears as "Simple Audio
+Split" in that device's volume mixer.
 
 ### Two displays over NVIDIA (HDMI / DisplayPort)
 
@@ -46,7 +50,7 @@ plays on both at once. If a monitor has no speakers or its audio is disabled, it
 won't be listed; check the monitor's HDMI/DP audio setting and that the NVIDIA
 audio driver is installed. If the monitors have identical names, use **Play test
 sound** to tell them apart. The default output plays directly and the other
-display gets a copy about 40 ms later; if neither display is the default, both get
+display gets a copy a few milliseconds later; if neither display is the default, both get
 copies at the same delay, so they stay in step with each other.
 
 ## How it works

@@ -64,6 +64,12 @@ std::wstring deviceName(IMMDevice* dev);
 // Looks a device up by ID; fails unless it is present and enabled.
 HRESULT getActiveDevice(IMMDeviceEnumerator* en, const std::wstring& id, ComPtr<IMMDevice>& out);
 
+// Opens `client` (not yet initialised) in shared mode at the smallest engine period the
+// driver offers (Windows 10 low-latency shared mode). Returns the period in frames, or 0
+// when that is unavailable or no better than the default; `client` must then be
+// discarded, since a failed Initialize leaves it unusable.
+UINT32 initSharedLowLatency(IAudioClient* client, const WAVEFORMATEX* fmt, DWORD streamFlags);
+
 bool parseFormat(const WAVEFORMATEX* wf, StreamFormat& out);
 std::wstring describeFormat(const StreamFormat& f);
 

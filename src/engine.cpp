@@ -129,7 +129,9 @@ struct Target {
   HANDLE event = nullptr;
   UINT32 bufferFrames = 0;
   UINT32 periodFrames = 0;
-  UINT32 queueFrames = 0;  // how full the device buffer is kept
+  UINT32 queueFrames = 0;     // how full the device buffer is kept; grows if the device starves
+  UINT32 maxQueueFrames = 0;
+  uint32_t serviced = 0;      // refills so far
   MirrorPipeline pipe;
   std::vector<float> out;
   int traced = 0;  // refills logged so far (SAS_TRACE)
@@ -491,12 +493,23 @@ std::unique_ptr<Source> Engine::Impl::openSource(const std::wstring& id, HRESULT
   if (FAILED(hr)) return nullptr;
 
   // The silent keep-alive stream is optional: without it the loopback just pauses
-  // during silence.
-  bool silentOk = SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &src->silentClient)) &&
-                  SUCCEEDED(src->silentClient->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, kSilenceBufferHns, 0,
-                                                          mix.get(), nullptr)) &&
-                  SUCCEEDED(src->silentClient->GetBufferSize(&src->silentFrames)) &&
-                  SUCCEEDED(src->silentClient->GetService(IID_PPV_ARGS(&src->silentRender)));
+  // during silence. Opened at the smallest engine period the driver offers, it also
+  // makes Windows run this device's mixer in small steps, so loopback packets arrive
+  // every few milliseconds instead of every 10.
+  auto openSilent = [&](bool lowLatency) {
+    src->silentRender.Reset();
+    src->silentClient.Reset();
+    if (FAILED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &src->silentClient))) return false;
+    if (lowLatency) {
+      if (!initSharedLowLatency(src->silentClient.Get(), mix.get(), 0)) return false;
+    } else if (FAILED(src->silentClient->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, kSilenceBufferHns, 0, mix.get(),
+                                                    nullptr))) {
+      return false;
+    }
+    return SUCCEEDED(src->silentClient->GetBufferSize(&src->silentFrames)) &&
+           SUCCEEDED(src->silentClient->GetService(IID_PPV_ARGS(&src->silentRender)));
+  };
+  bool silentOk = openSilent(true) || openSilent(false);
   if (silentOk) {
     BYTE* data = nullptr;
     silentOk = SUCCEEDED(src->silentRender->GetBuffer(src->silentFrames, &data)) &&
@@ -521,19 +534,34 @@ std::unique_ptr<Target> Engine::Impl::openTarget(const std::wstring& id, HRESULT
   ComPtr<IMMDevice> dev;
   hr = getActiveDevice(enumerator.Get(), id, dev);
   if (FAILED(hr)) return nullptr;
-  hr = dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &t->client);
-  if (FAILED(hr)) return nullptr;
   MixFormat mix;
-  hr = t->client->GetMixFormat(mix.put());
-  if (FAILED(hr)) return nullptr;
-  if (!parseFormat(mix.get(), t->fmt)) {
-    hr = AUDCLNT_E_UNSUPPORTED_FORMAT;
+  UINT32 lowPeriod = 0;
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    // Attempt 0 asks for the driver's smallest engine period; a failed attempt leaves
+    // the client unusable, so the fallback starts from a fresh one.
+    t->client.Reset();
+    hr = dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &t->client);
+    if (FAILED(hr)) return nullptr;
+    hr = t->client->GetMixFormat(mix.put());
+    if (FAILED(hr)) return nullptr;
+    if (!parseFormat(mix.get(), t->fmt)) {
+      hr = AUDCLNT_E_UNSUPPORTED_FORMAT;
+      return nullptr;
+    }
+    if (attempt == 0) {
+      lowPeriod = initSharedLowLatency(t->client.Get(), mix.get(), AUDCLNT_STREAMFLAGS_EVENTCALLBACK);
+      if (lowPeriod) break;
+      continue;
+    }
+    hr = t->client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, kRenderBufferHns, 0,
+                               mix.get(), nullptr);
+    if (FAILED(hr)) return nullptr;
+  }
+  t->event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+  if (!t->event) {
+    hr = HRESULT_FROM_WIN32(GetLastError());
     return nullptr;
   }
-  hr = t->client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, kRenderBufferHns, 0,
-                             mix.get(), nullptr);
-  if (FAILED(hr)) return nullptr;
-  t->event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
   hr = t->client->SetEventHandle(t->event);
   if (FAILED(hr)) return nullptr;
   hr = t->client->GetBufferSize(&t->bufferFrames);
@@ -541,10 +569,17 @@ std::unique_ptr<Target> Engine::Impl::openTarget(const std::wstring& id, HRESULT
   hr = t->client->GetService(IID_PPV_ARGS(&t->render));
   if (FAILED(hr)) return nullptr;
 
-  REFERENCE_TIME period = 0;
-  if (FAILED(t->client->GetDevicePeriod(&period, nullptr)) || period <= 0) period = 100000;  // 10 ms
-  t->periodFrames = std::max<UINT32>(1, static_cast<UINT32>(t->fmt.rate * period / 1e7 + 0.5));
-  t->queueFrames = std::min(t->bufferFrames, 2 * t->periodFrames);
+  if (lowPeriod) {
+    t->periodFrames = lowPeriod;
+  } else {
+    REFERENCE_TIME period = 0;
+    if (FAILED(t->client->GetDevicePeriod(&period, nullptr)) || period <= 0) period = 100000;  // 10 ms
+    t->periodFrames = std::max<UINT32>(1, static_cast<UINT32>(t->fmt.rate * period / 1e7 + 0.5));
+  }
+  // Keep as little queued as the device tolerates: 1.5 periods to start with, and
+  // serviceTarget() adds half a period at a time (up to 3) if the device ever runs dry.
+  t->maxQueueFrames = std::min(t->bufferFrames, 3 * t->periodFrames);
+  t->queueFrames = std::min(t->maxQueueFrames, t->periodFrames + (t->periodFrames + 1) / 2);
 
   const StreamFormat& s = sourceFormat;
   t->pipe.configure({s.channels, s.mask, s.rate}, {t->fmt.channels, t->fmt.mask, t->fmt.rate},
@@ -558,7 +593,9 @@ std::unique_ptr<Target> Engine::Impl::openTarget(const std::wstring& id, HRESULT
   if (FAILED(hr)) return nullptr;
   hr = t->client->Start();
   if (FAILED(hr)) return nullptr;
-  if (kTrace) std::fprintf(stderr, "opened target in %.1f ms\n", (nowSeconds() - started) * 1000.0);
+  if (kTrace)
+    std::fprintf(stderr, "opened target in %.1f ms (%s, period %u frames)\n", (nowSeconds() - started) * 1000.0,
+                 lowPeriod ? "low-latency" : "default latency", t->periodFrames);
   return t;
 }
 
@@ -715,6 +752,11 @@ HRESULT Engine::Impl::serviceTarget(Target& t, double now) {
   HRESULT hr = t.client->GetCurrentPadding(&padding);
   if (FAILED(hr)) return hr;
   if (padding >= t.queueFrames) return S_OK;  // the device has not taken the next period yet
+  if (padding == 0 && t.serviced > 4 && t.queueFrames < t.maxQueueFrames) {
+    // The device drained everything we gave it: queue more next time.
+    t.queueFrames = std::min(t.maxQueueFrames, t.queueFrames + (t.periodFrames + 1) / 2);
+  }
+  ++t.serviced;
 
   const UINT32 frames = t.queueFrames - padding;
   const size_t count = static_cast<size_t>(frames) * t.fmt.channels;

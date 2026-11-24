@@ -578,7 +578,7 @@ class MirrorPipeline {
     matrix_ = buildChannelMatrix(src.channels, src.mask, dst.channels, dst.mask);
     passthrough_ = isIdentityMatrix(matrix_, src.channels, dst.channels);
     fifo_.configure(dst.channels, src.rate, dst.rate);
-    packetSec_ = 0.010;
+    packetSec_ = 0.0;  // learned from the first packets
     lastArrival_ = 0.0;
     lastUpdate_ = 0.0;
     haveInput_ = false;
@@ -598,7 +598,10 @@ class MirrorPipeline {
   // Source side: `frames` interleaved source frames (nullptr = silence) that arrived at `now`.
   void push(const float* in, size_t frames, double now) {
     if (frames == 0) return;
-    packetSec_ = std::max(packetSec_, frames / src_.rate);
+    // Peak-hold with a slow fall, so a source that delivers small packets (low-latency
+    // shared mode) is not buffered as if it delivered 10 ms ones.
+    const double packet = frames / src_.rate;
+    packetSec_ = packet >= packetSec_ ? packet : packetSec_ + kPacketFall * (packet - packetSec_);
     if (passthrough_ || !in) {
       fifo_.write(in, frames);
     } else {
@@ -682,7 +685,8 @@ class MirrorPipeline {
  private:
   static constexpr double kMaxExcessSec = 0.1;
   static constexpr double kResyncErrorSec = 0.05;
-  static constexpr double kMarginGrowSec = 0.005;
+  static constexpr double kMarginGrowSec = 0.002;
+  static constexpr double kPacketFall = 0.01;  // per packet
   static constexpr double kMaxMarginSec = 0.1;
   static constexpr double kCalmSec = 600.0;  // dropout-free time before the margin shrinks again
   static constexpr double kFadeSec = 0.005;
@@ -706,7 +710,7 @@ class MirrorPipeline {
   double marginSec_ = 0.005;
   double baseMarginSec_ = 0.005;  // as configured
   double calmSec_ = 0.0;          // time since the last dropout
-  double packetSec_ = 0.01;  // largest packet seen from the source
+  double packetSec_ = 0.0;   // recent largest packet from the source
   std::vector<float> matrix_;
   bool passthrough_ = true;
   std::vector<float> mapped_;

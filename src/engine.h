@@ -14,7 +14,7 @@ struct EngineConfig {
   bool enabled = true;
   std::wstring sourceId;                // "" = follow the Windows default output device
   std::vector<std::wstring> targetIds;  // devices that should also play the sound
-  double marginMs = 5.0;                // safety buffer beyond the structural minimum
+  double marginMs = 1.0;                // safety buffer beyond the structural minimum
 };
 
 enum class TargetState {
