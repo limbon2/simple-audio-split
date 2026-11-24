@@ -72,6 +72,16 @@ HRESULT getActiveDevice(IMMDeviceEnumerator* en, const std::wstring& id, ComPtr<
   return S_OK;
 }
 
+UINT32 initSharedLowLatency(IAudioClient* client, const WAVEFORMATEX* fmt, DWORD streamFlags) {
+  ComPtr<IAudioClient3> c3;
+  if (FAILED(client->QueryInterface(IID_PPV_ARGS(&c3)))) return 0;
+  UINT32 defaultPeriod = 0, fundamental = 0, minPeriod = 0, maxPeriod = 0;
+  if (FAILED(c3->GetSharedModeEnginePeriod(fmt, &defaultPeriod, &fundamental, &minPeriod, &maxPeriod))) return 0;
+  if (minPeriod == 0 || minPeriod >= defaultPeriod) return 0;
+  if (FAILED(c3->InitializeSharedAudioStream(streamFlags, minPeriod, fmt, nullptr))) return 0;
+  return minPeriod;
+}
+
 bool parseFormat(const WAVEFORMATEX* wf, StreamFormat& out) {
   out = StreamFormat{};
   if (!wf) return false;

@@ -78,13 +78,14 @@ struct DriftResult {
   double maxCurvature = 0;  // largest second difference of the output sine after start-up
 };
 
-static DriftResult simulateDrift(double srcRate, double dstRate, double ppm, double jitterMs, double seconds) {
+static DriftResult simulateDrift(double srcRate, double dstRate, double ppm, double jitterMs, double seconds,
+                                 double periodMs = 10.0, double marginMs = 5.0) {
   MirrorPipeline pipe;
-  pipe.configure({1, 0, srcRate}, {1, 0, dstRate}, 0.010, 0.005);
+  pipe.configure({1, 0, srcRate}, {1, 0, dstRate}, periodMs / 1000.0, marginMs / 1000.0);
 
   const double actualSrcRate = srcRate * (1.0 + ppm * 1e-6);
-  const size_t srcPacket = static_cast<size_t>(srcRate / 100);
-  const size_t dstChunk = static_cast<size_t>(dstRate / 100);
+  const size_t srcPacket = static_cast<size_t>(srcRate * periodMs / 1000.0 + 0.5);
+  const size_t dstChunk = static_cast<size_t>(dstRate * periodMs / 1000.0 + 0.5);
   const double srcPeriod = srcPacket / actualSrcRate;
   const double dstPeriod = dstChunk / dstRate;
   const double tone = 440.0;
@@ -149,6 +150,14 @@ static void testDrift() {
               r.maxCurvature < clean,
           buf);
   }
+
+  // Low-latency shared mode: 128-frame periods on both devices must buffer far less
+  // than the 10 ms case (it used to be pinned at a 10 ms packet estimate).
+  const DriftResult low = simulateDrift(48000, 48000, 150, 0.5, 300, 128.0 * 1000.0 / 48000.0, 2.0);
+  char buf[200];
+  std::snprintf(buf, sizeof buf, "2.7 ms periods, margin 2 ms: latency %.1f ms (need < 10), underruns %u, resyncs %u",
+                low.latencyMs, low.underruns, low.resyncs);
+  check(low.latencyMs < 10.0 && low.underruns == 0 && low.resyncs == 0 && std::fabs(low.learnedPpm - 150) < 10.0, buf);
 }
 
 static void testChannelMatrix() {

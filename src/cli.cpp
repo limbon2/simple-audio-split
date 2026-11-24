@@ -125,7 +125,7 @@ struct Options {
   std::wstring source;  // "" = default
   std::vector<std::wstring> targets;
   double seconds = 10;
-  double marginMs = 5;
+  double marginMs = 1;
   double levelDb = -60;
 };
 
