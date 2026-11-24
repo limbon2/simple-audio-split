@@ -13,14 +13,15 @@ if not defined VSDIR goto novs
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul 2>nul || goto novs
 
 if not exist build mkdir build
-set CFLAGS=/nologo /std:c++20 /utf-8 /O2 /MT /EHsc /W4 /permissive- /DUNICODE /D_UNICODE /DNOMINMAX /Fobuild\
+set CFLAGS=/nologo /std:c++20 /utf-8 /O2 /MT /EHsc /W4 /sdl /GS /guard:cf /permissive- /DUNICODE /D_UNICODE /DNOMINMAX /Fobuild\
+set LDFLAGS=/nologo /DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA /GUARD:CF /CETCOMPAT /DEPENDENTLOADFLAG:0x800
 set LIBS=ole32.lib user32.lib shell32.lib comctl32.lib advapi32.lib avrt.lib
 
 rc /nologo /fo build\app.res res\app.rc || exit /b 1
 cl %CFLAGS% /c src\app.cpp src\engine.cpp src\wasapi_util.cpp src\tone.cpp src\settings.cpp src\cli.cpp tests\dsp_test.cpp || exit /b 1
-link /nologo /MANIFEST:NO /SUBSYSTEM:WINDOWS /OUT:build\SimpleAudioSplit.exe build\app.obj build\engine.obj build\wasapi_util.obj build\tone.obj build\settings.obj build\app.res %LIBS% || exit /b 1
-link /nologo /SUBSYSTEM:CONSOLE /OUT:build\sas-cli.exe build\cli.obj build\engine.obj build\wasapi_util.obj build\tone.obj %LIBS% || exit /b 1
-link /nologo /SUBSYSTEM:CONSOLE /OUT:build\dsp_test.exe build\dsp_test.obj || exit /b 1
+link %LDFLAGS% /MANIFEST:NO /SUBSYSTEM:WINDOWS /OUT:build\SimpleAudioSplit.exe build\app.obj build\engine.obj build\wasapi_util.obj build\tone.obj build\settings.obj build\app.res %LIBS% || exit /b 1
+link %LDFLAGS% /SUBSYSTEM:CONSOLE /OUT:build\sas-cli.exe build\cli.obj build\engine.obj build\wasapi_util.obj build\tone.obj %LIBS% || exit /b 1
+link %LDFLAGS% /SUBSYSTEM:CONSOLE /OUT:build\dsp_test.exe build\dsp_test.obj || exit /b 1
 echo.
 echo Built build\SimpleAudioSplit.exe
 exit /b 0

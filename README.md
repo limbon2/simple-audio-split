@@ -38,6 +38,17 @@ The copy plays about 40 ms behind the default output. That's not noticeable for 
 people listening or watching together. Each headset keeps its own volume control, and
 the copy also appears as "Simple Audio Split" in that device's volume mixer.
 
+### Two displays over NVIDIA (HDMI / DisplayPort)
+
+Each monitor connected to an NVIDIA GPU appears as its own playback device, named
+like "LG ULTRAWIDE (NVIDIA High Definition Audio)". Tick both and the same sound
+plays on both at once. If a monitor has no speakers or its audio is disabled, it
+won't be listed; check the monitor's HDMI/DP audio setting and that the NVIDIA
+audio driver is installed. If the monitors have identical names, use **Play test
+sound** to tell them apart. The default output plays directly and the other
+display gets a copy about 40 ms later; if neither display is the default, both get
+copies at the same delay, so they stay in step with each other.
+
 ## How it works
 
 The app records what the default output is playing (WASAPI loopback) and plays it on
@@ -71,8 +82,10 @@ This produces:
 | `build\sas-cli.exe` | Console diagnostics, see below |
 | `build\dsp_test.exe` | Offline tests for the resampler, drift control and channel mapping |
 
-`python tools\make_icon.py` regenerates the icons. Pushing a tag like `v1.2.0` makes
-GitHub Actions build the app and publish it as a release.
+`python tools\make_icon.py` regenerates the icons. Pushing a tag like `v1.2.0` on a
+commit that is on `main` makes GitHub Actions build the app, run the tests, check that
+the executables have ASLR, DEP and control flow guard enabled, and publish them with a
+`SHA256SUMS` file as a release.
 
 ## Diagnostics
 
